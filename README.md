@@ -4,6 +4,6 @@ npm install
 
 node app
 
-В конфиге swap.react /config/testnet/api.js
+https://github.com/swaponline/MultiCurrencyWallet/blob/master/config/testnet/api.js#L5
 
-добавить в секции bitpay первым 'http://localhost:32250/btc/testnet'
+add to section "pitpay" 'http://localhost:32250/btc/testnet'
