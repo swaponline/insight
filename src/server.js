@@ -29,16 +29,6 @@ const crossOriginAllow = (res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
 }
 
-const proxyUrl = (url, req, res) => {
-  var r = null;
-  if(req.method === 'POST') {
-    r = request.post({uri: url, json: req.body});
-  } else {
-    r = request(url);
-  }
-  req.pipe(r).pipe(res);
-}
-
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({
@@ -162,12 +152,10 @@ app.use('/btc/testnet/rawtx', async (req, res) => {
 
   }
 })
-app.use('/btc/testnet/tx/', async (req, res) => {
-  const urlParts = req.url.split('/')
-  urlParts.shift()
+app.get('/btc/testnet/tx/:txId', async (req, res) => {
+  const { txId } = req.params
+  if (txId) {
 
-  if (urlParts.length == 1) {
-    const txId = urlParts[0]
     const url = `https://api.blockcypher.com/v1/btc/test3/txs/${txId}`
     request
       .get(url)
@@ -253,7 +241,7 @@ app.use('/btc/testnet/addr/', async (req,res) => {
     let url = `https://api.bitcore.io/api/BTC/testnet/address/${address}/balance`
     if (urlParts.length === 2 && urlParts[1] === `utxo`) {
       isUnspends = true
-      url = `https://api.bitcore.io/api/BTC/testnet/address/${address}?unspents=true`
+      url = `https://api.bitcore.io/api/BTC/testnet/address/${address}?unspent=true`
     }
     //const url = `https://api.blockcypher.com/v1/btc/test3/addrs/${address}?unspentOnly=true`
     
@@ -306,6 +294,26 @@ app.use('/btc/testnet/addr/', async (req,res) => {
   }
 })
 
+app.post('/btc/testnet/tx/send', async (req, res) => {
+  const { rawtx } = req.body
+  console.log(rawtx)
+  try {
+    request
+      .post(`https://api.bitcore.io/api/BTC/testnet/tx/send`)
+      .send({
+        rawTx: rawtx,
+      })
+      .end((err, res) => {
+        if (err) {
 
+        }
+        console.log(res)
+        console.log(err)
+      });
+  } catch (e) {
+    console.log(e)
+  }
+  res.status(200).json({rawtx})
+})
 //app.listen(process.env.PORT)
 app.listen((process.env.PORT) ? process.env.PORT : 32250)
