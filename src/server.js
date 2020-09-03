@@ -1,4 +1,6 @@
-console.log('begin')
+const port = 32250;
+
+
 const fs = require("fs")
 const path = require("path")
 const express = require("express")
@@ -21,6 +23,8 @@ const getDate = () => { return new Date().toISOString() }
 const calcSum = (accumulator, currentValue) => accumulator + currentValue;
 
 const memodyDB = []
+
+const cachedBalance = {}
 
 const crossOriginAllow = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -244,7 +248,24 @@ app.use('/btc/testnet/addr/', async (req,res) => {
       url = `https://api.bitcore.io/api/BTC/testnet/address/${address}?unspent=true`
     }
     //const url = `https://api.blockcypher.com/v1/btc/test3/addrs/${address}?unspentOnly=true`
-    
+
+    if (isUnspends) {
+      if (cachedBalance[`${address}_unspents`]
+        && cachedBalance[`${address}_unspents`].timelife > timestamp()
+      ) {
+        // console.log('unspents from cache', address)
+        res.status(200).json(cachedBalance[`${address}_unspents`].answer)
+        return
+      }
+    } else {
+      if (cachedBalance[address]
+        && cachedBalance[address].timelife > timestamp()
+      ) {
+        // console.log('balance from cache', address)
+        res.status(200).json(cachedBalance[address].answer)
+        return
+      }
+    }
     request
       .get(url)
       .then((req) => {
@@ -265,6 +286,10 @@ app.use('/btc/testnet/addr/', async (req,res) => {
                 vout: txInfo.mintIndex,
               }
             })
+            cachedBalance[`${address}_unspents`] = {
+              timelife: timestamp() + 60*5, // 5 minutes
+              answer: retJson
+            }
             res.status(200).json(retJson)
           } else {
             const retJson = {
@@ -281,6 +306,10 @@ app.use('/btc/testnet/addr/', async (req,res) => {
               unconfirmedBalanceSat: answer.unconfirmed_balance,
               unconfirmedTxApperances: 0,
             }
+            cachedBalance[address] = {
+              timelife: timestamp() + 60*5, // 5 minutes
+              answer: retJson
+            }
             res.status(200).json(retJson)
           }
         } else {
@@ -294,26 +323,48 @@ app.use('/btc/testnet/addr/', async (req,res) => {
   }
 })
 
+const sendErrorCache = {}
+
 app.post('/btc/testnet/tx/send', async (req, res) => {
   const { rawtx } = req.body
-  console.log(rawtx)
+  // console.log(rawtx)
+  if (sendErrorCache[rawtx]) {
+    res.status(200).json({ error: sendErrorCache[rawtx] })
+    return
+  }
   try {
     request
       .post(`https://api.bitcore.io/api/BTC/testnet/tx/send`)
       .send({
         rawTx: rawtx,
       })
-      .end((err, res) => {
-        if (err) {
-
+      .end((err, ress) => {
+        if (ress
+          && ress.body
+          && ress.body.txid
+        ) {
+          res.status(200).json(ress.body)
         }
-        console.log(res)
-        console.log(err)
+        if (err) {
+          if (err.response
+            && err.response.text
+          ) {
+            sendErrorCache[rawtx] = err.response.text
+            console.log(err)
+            res.status(200).json({ error: err.response.text })
+          }
+        }
+        //console.log(res)
+        //console.log(err)
       });
   } catch (e) {
     console.log(e)
   }
-  res.status(200).json({rawtx})
+  //res.status(200).json({rawtx})
 })
-//app.listen(process.env.PORT)
-app.listen((process.env.PORT) ? process.env.PORT : 32250)
+
+app.listen((process.env.PORT) ? process.env.PORT : port)
+
+console.log(`BTC-testnet proxy listening: localhost:${port} ⮂ bitcore & blockcryper`);
+
+
